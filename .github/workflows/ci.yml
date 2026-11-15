@@ -6,44 +6,32 @@ on:
     branches: [main]
 
 permissions:
-  contents: read
+  contents: write
   packages: read
 
 jobs:
+  # Build, testes, gate de cobertura, SonarCloud e validação do chart vivem no workflow
+  # reutilizável do infra-k8s, compartilhado pelos microsserviços da Fase 4.
   build-test:
-    runs-on: ubuntu-latest
+    uses: euthribeiro/infra-k8s/.github/workflows/dotnet-service-ci.yml@master
+    secrets: inherit
+    with:
+      solution: wrench.billing.sln
+      cobertura_minima: 80
+      cobertura_assembly_filtros: '+wrench.billing.*;-*.tests'
+      cobertura_classe_filtros: '-Program;-*.Program;-*.Migrations.*'
+      sonar_project_key: euthribeiro_billing-service
+      sonar_organization: euthribeiro
+      sonar_exclusions: '**/Migrations/**,**/obj/**,**/bin/**,**/Program.cs,.github/**'
+      helm_chart: chart
+      helm_lint_args: '--set jwt.secret=ci --set database.user=ci --set database.password=ci'
 
-    env:
-      GITHUB_PACKAGES_TOKEN: ${{ github.token }}
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 10.0.x
-
-      - name: Restore
-        run: dotnet restore
-
-      - name: Build
-        run: dotnet build --no-restore -c Release
-
-      - name: Test com cobertura
-        run: >
-          dotnet test --no-build -c Release
-          --collect:"XPlat Code Coverage"
-          --settings tests/wrench.billing.tests/coverage.runsettings
-
-      - name: Verificar cobertura mínima (80%)
-        run: |
-          dotnet tool install --global dotnet-reportgenerator-globaltool
-          reportgenerator "-reports:tests/**/coverage.cobertura.xml" "-targetdir:coverage-report" "-reporttypes:TextSummary"
-          cat coverage-report/Summary.txt
-          COBERTURA=$(grep -oP 'Line coverage: \K[0-9.]+' coverage-report/Summary.txt)
-          awk -v c="$COBERTURA" 'BEGIN { if (c < 80) { print "Cobertura " c "% abaixo de 80%"; exit 1 } }'
-
-      - name: Validar chart Helm
-        run: |
-          curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-          helm lint chart --set jwt.secret=ci --set database.user=ci --set database.password=ci
+  deploy-producao:
+    if: github.ref == 'refs/heads/main'
+    needs: build-test
+    uses: ./.github/workflows/deploy.yml
+    secrets: inherit
+    with:
+      environment: 'production'
+      hostname: 'api.bgt3.com.br'
+      release_name: 'wrench-billing'
