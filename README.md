@@ -51,26 +51,26 @@ terraform/                     database e role do Billing no RDS (ver terraform/
 Toda mensagem carrega `OrdemServicoId` e `CorrelationId`. O `CorrelationId` é **texto livre**, como no
 `execucao-service`, e viaja no header `correlationId`; quando é um GUID também vira o CorrelationId do transporte.
 
-Os contratos estão em `src/wrench.billing.application/Contracts/Mensagens.cs` e devem ser trocados pelo pacote
-compartilhado `Wrench.Contracts` v1 quando for publicado (mudanças apenas aditivas).
+Os contratos vêm do pacote compartilhado **`Wrench.Contracts` 1.0.0**, publicado no GitHub Packages a partir do
+repositório `euthribeiro/wrench-contracts`, que é a fonte da verdade. Mudanças de contrato entram lá primeiro, de
+forma aditiva na linha 1.x. O restore precisa de autenticação: veja "Build local" mais abaixo.
 
 **Consome (comandos do orquestrador)**
 
 | Mensagem | Efeito |
 |---|---|
-| `GerarOrcamento` | Cria o orçamento, envia ao cliente e publica `OrcamentoGerado` (ou `OrcamentoFalhou` se os dados forem inválidos). |
-| `CancelarOrcamento` | Compensação: cancela orçamento e cobrança pendente; publica `OrcamentoCancelado`. |
+| `GerarOrcamento` | Cria o orçamento e publica `OrcamentoCriado` (ou `OrcamentoFalhou` se os dados forem inválidos). |
+| `CancelarOrcamento` | Compensação: cancela orçamento e cobrança pendente. Não publica evento — a Saga não aguarda resposta desta compensação. |
 | `EstornarPagamento` | Compensação: estorna o pagamento confirmado; publica `PagamentoEstornado` ou `EstornoFalhou`. |
 
 **Publica**
 
 | Evento | Quando |
 |---|---|
-| `OrcamentoGerado` / `OrcamentoFalhou` | Resultado de `GerarOrcamento`. |
-| `OrcamentoAprovado` | Cliente aprovou; cobrança Pix criada (traz o Pix copia-e-cola e a expiração). |
+| `OrcamentoCriado` / `OrcamentoFalhou` | Resultado de `GerarOrcamento`. |
+| `OrcamentoAprovado` | Cliente aprovou; cobrança Pix criada. O evento carrega `ValorAprovado` e `AprovadoEm`; o Pix copia-e-cola fica na resposta HTTP da aprovação, não no contrato da Saga. |
 | `OrcamentoRecusado` | Cliente recusou. |
-| `OrcamentoCancelado` | Resultado de `CancelarOrcamento`. |
-| `PagamentoConfirmado` | Webhook ou conciliação confirmou o pagamento. |
+| `PagamentoAprovado` | Webhook ou conciliação confirmou o pagamento. |
 | `PagamentoFalhou` | Pagamento recusado, cancelado no provedor ou expirado (o Billing já cancela cobrança e orçamento). |
 | `PagamentoEstornado` / `EstornoFalhou` | Resultado de `EstornarPagamento`. |
 
@@ -81,12 +81,12 @@ sequenceDiagram
     participant MP as Mercado Pago (mock)
     participant E as Execução
     OS->>B: GerarOrcamento
-    B-->>OS: OrcamentoGerado
+    B-->>OS: OrcamentoCriado
     Note over B: cliente aprova via REST
     B->>MP: cria cobrança Pix
     B-->>OS: OrcamentoAprovado
     MP-->>B: webhook (x-signature)
-    B-->>OS: PagamentoConfirmado
+    B-->>OS: PagamentoAprovado
     OS->>E: IniciarExecucao
     E-->>OS: ExecucaoFalhou
     OS->>B: EstornarPagamento
@@ -123,27 +123,36 @@ Erros: `401` token ou assinatura inválidos, `403` perfil sem permissão, `404` 
 > `aprovar` e `recusar` mantêm o caminho e o perfil do `OrcamentoController` do monólito. O OS Service extraído
 > não deve mais expor `/orcamento/*`, e o API Gateway precisa rotear `/api/v1/orcamento` e `/api/v1/pagamento`
 > (incluindo o webhook público) para este serviço. O `{id}` do orçamento é gerado aqui e chega ao OS Service no
-> evento `OrcamentoGerado`.
+> evento `OrcamentoCriado`.
 
-## Topologia de mensagens (nomes configuráveis)
+## Topologia de mensagens
 
-Os nomes de tópicos e filas **não estão fixos no código**: dependem de como a plataforma provisiona o SNS/SQS
-(Terraform do Thiago) e ainda não foram confirmados. O Billing adota uma **suposição** baseada no plano da Fase 4
-(um tópico por publicador, uma fila com DLQ por consumidor, MassTransit 8.x) e expõe tudo em configuração,
-então ajustar é trocar valores, sem recompilar:
+Os nomes abaixo são os **provisionados pelo Terraform** do `infra-k8s`, em `terraform/mensageria`. Quem cria
+tópicos, filas, DLQs e assinaturas é o Terraform — o Billing apenas se conecta ao que já existe. Os valores
+continuam em configuração, então dá para apontar para outro ambiente sem recompilar:
 
-| Configuração | Padrão (suposição) | Efeito |
+| Configuração | Padrão | Efeito |
 |---|---|---|
 | `Messaging:TopicoEventos` | `wrench-billing-events` | Todos os eventos publicados pelo Billing vão para este tópico |
-| `Messaging:TopicoComandos` | `wrench-os-events` | Tópico ao qual as filas do Billing se inscrevem para receber `GerarOrcamento`, `CancelarOrcamento` e `EstornarPagamento` |
-| `Messaging:PrefixoFilas` | `billing` | Prefixo das filas de consumo (`billing-gerar-orcamento`, `billing-cancelar-orcamento`, `billing-estornar-pagamento`) |
+| `Messaging:TopicoComandos` | `wrench-os-events` | Tópico do orquestrador, de onde vêm os comandos |
+| `Messaging:FilaGerarOrcamento` | `wrench-billing-gerar-orcamento` | Fila que recebe apenas `GerarOrcamento` |
+| `Messaging:FilaCancelarOrcamento` | `wrench-billing-cancelar-orcamento` | Fila que recebe apenas `CancelarOrcamento` |
+| `Messaging:FilaEstornarPagamento` | `wrench-billing-estornar-pagamento` | Fila que recebe apenas `EstornarPagamento` |
 
-- **Valor vazio** em `TopicoEventos` ou `TopicoComandos` volta ao padrão do MassTransit: um tópico por tipo de mensagem.
-- No Kubernetes os valores vêm do chart (`messaging.topicoEventos`, `messaging.topicoComandos`, `messaging.prefixoFilas`).
-- **A outra ponta precisa usar os mesmos nomes.** O OS Service deve publicar os comandos no `TopicoComandos` e se inscrever
-  no `TopicoEventos`; idealmente esses nomes ficam no pacote `Wrench.Contracts`.
-- O código está em `src/wrench.billing.infra/Mensageria/MensageriaTopologia.cs`, com testes em `Infra/InfrastructureTests.cs`.
-- A IAM do IRSA precisa permitir publicar nesses tópicos e consumir/inscrever essas filas; a DLQ de cada fila é provisionada fora deste repositório.
+**Por que uma fila por comando.** As assinaturas usam `raw_message_delivery`, ou seja, o corpo entregue é o JSON
+puro do contrato, sem o envelope do MassTransit. Sem envelope não há como inferir o tipo da mensagem, então cada
+fila recebe um único tipo — o filter policy da assinatura filtra pelo message attribute `tipo`. Assim o endpoint
+sabe em qual contrato desserializar.
+
+**Metadados.** Toda publicação passa por `PublishExtensions.PublishComCorrelacao`, que seta o header `tipo` (o
+que o filter policy avalia; sem ele a mensagem é descartada antes de chegar na fila) e o `correlationId`.
+
+**`ConfigureConsumeTopology` fica desligado** nos três endpoints, para que o MassTransit não crie tópicos e
+assinaturas por fora do Terraform.
+
+- No Kubernetes os valores vêm do chart (`messaging.*`).
+- O código está em `src/wrench.billing.infra/Mensageria/MensageriaTopologia.cs` e `DependencyInjection.cs`, com testes em `Infra/InfrastructureTests.cs`.
+- A IAM do IRSA (`wrench-billing-sa`) já permite publicar no tópico e consumir as três filas; as DLQs são provisionadas junto.
 
 ## Observabilidade
 
@@ -186,7 +195,10 @@ Variáveis de ambiente usam `__` (ex.: `Pagamento__WebhookSecret`).
 | `Messaging:Region` / `Messaging:ServiceUrl` | Região AWS / endpoint (LocalStack) |
 | `Messaging:TopicoEventos` | Tópico SNS onde o Billing publica **todos** os seus eventos (padrão `wrench-billing-events`) |
 | `Messaging:TopicoComandos` | Tópico SNS do qual consome os comandos do orquestrador (padrão `wrench-os-events`) |
-| `Messaging:PrefixoFilas` | Prefixo das filas SQS, uma por consumer (padrão `billing`, ex.: `billing-gerar-orcamento`) |
+| `Messaging:FilaGerarOrcamento` | Fila SQS de `GerarOrcamento` (padrão `wrench-billing-gerar-orcamento`) |
+| `Messaging:FilaCancelarOrcamento` | Fila SQS de `CancelarOrcamento` (padrão `wrench-billing-cancelar-orcamento`) |
+| `Messaging:FilaEstornarPagamento` | Fila SQS de `EstornarPagamento` (padrão `wrench-billing-estornar-pagamento`) |
+| `GITHUB_PACKAGES_TOKEN` | Token com escopo `read:packages`, necessário no `dotnet restore` para baixar o `Wrench.Contracts` |
 | `Pagamento:WebhookSecret` | Segredo da validação do `x-signature` |
 | `Pagamento:ExpiracaoPixMinutos` | Validade do Pix (padrão 30) |
 | `Pagamento:ReconciliacaoIntervaloSegundos` | Intervalo da conciliação (padrão 30) |
@@ -200,6 +212,19 @@ Variáveis de ambiente usam `__` (ex.: `Pagamento__WebhookSecret`).
 Credenciais AWS vêm do IRSA no EKS (sem chaves estáticas). Segredos nunca entram no repositório.
 
 ## Como rodar
+
+### Build local: token do GitHub Packages
+
+O `Wrench.Contracts` vem de um feed autenticado, e o feed exige token **mesmo com o repositório público**. Sem a
+variável abaixo o `dotnet restore` falha com 401:
+
+```powershell
+gh auth refresh -s read:packages
+$env:GITHUB_PACKAGES_TOKEN = (gh auth token)
+```
+
+O `nuget.config` na raiz lê esse valor; nenhum token é versionado. No CI a variável é preenchida com o token do
+próprio workflow, que tem `packages: read`.
 
 ```powershell
 # Postgres + API em http://localhost:8082/docs-ui (barramento em memória, simulação habilitada)
@@ -263,14 +288,13 @@ Falta a parte de SonarCloud, imagem no ECR e deploy no EKS, que dependem do work
 
 ## Pendências conhecidas
 
-- Pipeline completa (SonarCloud, ECR, deploy Helm): depende do workflow reutilizável do Thiago.
-- **Nomes de tópicos e filas**: valores padrão são suposição (ver "Topologia de mensagens"); confirmar com o Thiago e o João Paulo.
-- **Formato de mensagem entre serviços**: o `execucao-service` publica JSON puro no SNS (atributos `messageId`, `tipo`,
-  `correlationId`, `traceparent`), enquanto este serviço usa o envelope do MassTransit. É preciso decidir com o grupo
-  um único formato e a topologia de tópicos (um por publicador, segundo o plano) antes da integração.
-- Contratos locais: trocar por `Wrench.Contracts` v1 e alinhar nomes e campos com os demais serviços.
-- E-mail do orçamento: o `LogOrcamentoNotificador` só registra o envio; a troca por Amazon SES é uma nova
-  implementação de `IOrcamentoNotificador`.
+- Pipeline completa (SonarCloud, ECR, deploy Helm): depende do workflow reutilizável do `infra-k8s`.
+- **Integração ponta a ponta ainda não exercitada contra a AWS real**: a mensageria só sobe depois que o
+  `terraform/mensageria` do `infra-k8s` for aplicado. Até lá, o caminho de teste é `Messaging:Transport=InMemory`.
+- E-mail do orçamento: quem notifica o cliente é o OS Service, que tem SES e os event handlers. O contrato
+  `GerarOrcamento` não carrega o e-mail, então `Orcamento.ClienteEmail` fica vazio e o `LogOrcamentoNotificador`
+  apenas registra. Se o envio passar a ser do Billing, o campo volta ao contrato de forma aditiva na linha 1.x.
+- `CancelarOrcamento` não publica evento de retorno: a Saga trata essa compensação como fire-and-forget.
 - Collection Postman validada apenas como JSON e conferida com as rotas; ainda não foi importada e executada no Postman.
 - Observabilidade e trace distribuído (Billing → SQS → OS Service) a validar no New Relic em homologação.
 - Validado localmente (Docker 29, Helm 3.22): `docker build`, `docker compose up` com Postgres real (migrations aplicadas, `/health/ready` 200,

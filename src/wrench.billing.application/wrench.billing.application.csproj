@@ -8,6 +8,7 @@
     <PackageReference Include="MassTransit" Version="8.5.12" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.7" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.7" />
+    <PackageReference Include="Wrench.Contracts" Version="1.0.0" />
   </ItemGroup>
 
   <PropertyGroup>

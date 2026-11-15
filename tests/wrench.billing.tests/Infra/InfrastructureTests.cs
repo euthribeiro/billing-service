@@ -12,7 +12,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using wrench.billing.application.Contracts;
+using Wrench.Contracts;
 using wrench.billing.application.Services;
 using wrench.billing.application.Options;
 
@@ -76,9 +76,9 @@ public class InfrastructureTests
     {
         await using var provider = Montar(ConfigSqs());
 
-        Assert.Equal(MensageriaOptions.TopicoEventosPadrao, TopicoPublicacao<OrcamentoGerado>(provider));
+        Assert.Equal(MensageriaOptions.TopicoEventosPadrao, TopicoPublicacao<OrcamentoCriado>(provider));
         Assert.Equal(MensageriaOptions.TopicoEventosPadrao, TopicoPublicacao<OrcamentoAprovado>(provider));
-        Assert.Equal(MensageriaOptions.TopicoEventosPadrao, TopicoPublicacao<PagamentoConfirmado>(provider));
+        Assert.Equal(MensageriaOptions.TopicoEventosPadrao, TopicoPublicacao<PagamentoAprovado>(provider));
         Assert.Equal(MensageriaOptions.TopicoEventosPadrao, TopicoPublicacao<PagamentoEstornado>(provider));
         Assert.Equal(MensageriaOptions.TopicoEventosPadrao, TopicoPublicacao<EstornoFalhou>(provider));
     }
@@ -105,11 +105,11 @@ public class InfrastructureTests
             ["Messaging:TopicoComandos"] = ""
         }));
 
-        var topico = TopicoPublicacao<OrcamentoGerado>(provider);
+        var topico = TopicoPublicacao<OrcamentoCriado>(provider);
 
         Assert.NotNull(topico);
         Assert.NotEqual(MensageriaOptions.TopicoEventosPadrao, topico);
-        Assert.Contains("OrcamentoGerado", topico);
+        Assert.Contains("OrcamentoCriado", topico);
     }
 
     [Fact]
@@ -154,11 +154,11 @@ public class InfrastructureTests
             NullLogger<PagamentoReconciliacaoWorker>.Instance);
 
         await worker.StartAsync(CancellationToken.None);
-        for (var i = 0; i < 40 && !c.Publicadas.OfType<PagamentoConfirmado>().Any(); i++)
+        for (var i = 0; i < 40 && !c.Publicadas.OfType<PagamentoAprovado>().Any(); i++)
             await Task.Delay(100);
         await worker.StopAsync(CancellationToken.None);
 
-        Assert.Single(c.Publicadas.OfType<PagamentoConfirmado>());
+        Assert.Single(c.Publicadas.OfType<PagamentoAprovado>());
     }
 
     [Fact]

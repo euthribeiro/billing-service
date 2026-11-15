@@ -113,8 +113,25 @@ public static class DependencyInjection
                                 ?? new MensageriaOptions();
                 MensageriaTopologia.Aplicar(cfg, topologia);
 
-                cfg.ConfigureEndpoints(context, new KebabCaseEndpointNameFormatter(
-                    string.IsNullOrWhiteSpace(topologia.PrefixoFilas) ? null : topologia.PrefixoFilas.Trim(), false));
+                cfg.UseRawJsonSerializer(RawSerializerOptions.AnyMessageType | RawSerializerOptions.AddTransportHeaders);
+
+                cfg.ReceiveEndpoint(topologia.FilaGerarOrcamento, e =>
+                {
+                    e.ConfigureConsumeTopology = false;
+                    e.ConfigureConsumer<GerarOrcamentoConsumer>(context);
+                });
+
+                cfg.ReceiveEndpoint(topologia.FilaCancelarOrcamento, e =>
+                {
+                    e.ConfigureConsumeTopology = false;
+                    e.ConfigureConsumer<CancelarOrcamentoConsumer>(context);
+                });
+
+                cfg.ReceiveEndpoint(topologia.FilaEstornarPagamento, e =>
+                {
+                    e.ConfigureConsumeTopology = false;
+                    e.ConfigureConsumer<EstornarPagamentoConsumer>(context);
+                });
             });
         });
     }

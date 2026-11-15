@@ -5,7 +5,7 @@ using wrench.billing.domain.Pagamentos;
 using wrench.billing.tests.Support;
 using Microsoft.EntityFrameworkCore;
 using Moq;
-using wrench.billing.application.Contracts;
+using Wrench.Contracts;
 using wrench.billing.application.Exceptions;
 
 namespace wrench.billing.tests.Application;
@@ -21,7 +21,7 @@ public class OrcamentoServiceTests
 
         var orcamento = await c.Db.Orcamentos.Include(o => o.Itens).SingleAsync();
         Assert.Equal(400m, orcamento.ValorTotal); // 100 de mão de obra + 2 x 150
-        var evento = Assert.Single(c.Eventos<OrcamentoGerado>());
+        var evento = Assert.Single(c.Eventos<OrcamentoCriado>());
         Assert.Equal(orcamento.Id, evento.OrcamentoId);
         Assert.Equal(Cenario.OrdemServicoId, evento.OrdemServicoId);
         Assert.Equal(Cenario.CorrelationId, evento.CorrelationId);
@@ -37,7 +37,7 @@ public class OrcamentoServiceTests
         await c.Orcamentos().GerarAsync(Cenario.ComandoGerar(), CancellationToken.None);
 
         Assert.Equal(1, await c.Db.Orcamentos.CountAsync());
-        Assert.Equal(2, c.Eventos<OrcamentoGerado>().Count());
+        Assert.Equal(2, c.Eventos<OrcamentoCriado>().Count());
         c.Notificador.Verify(n => n.EnviarAsync(It.IsAny<Orcamento>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -46,12 +46,13 @@ public class OrcamentoServiceTests
     {
         var c = new Cenario();
 
-        await c.Orcamentos().GerarAsync(Cenario.ComandoGerar(email: " "), CancellationToken.None);
+        await c.Orcamentos().GerarAsync(
+            Cenario.ComandoGerar(maoDeObra: 0m, quantidadePecas: 0), CancellationToken.None);
 
         Assert.Empty(c.Db.Orcamentos);
         var falha = Assert.Single(c.Eventos<OrcamentoFalhou>());
         Assert.Equal(Cenario.OrdemServicoId, falha.OrdemServicoId);
-        Assert.Empty(c.Eventos<OrcamentoGerado>());
+        Assert.Empty(c.Eventos<OrcamentoCriado>());
     }
 
     [Fact]
@@ -64,7 +65,7 @@ public class OrcamentoServiceTests
         await c.Orcamentos().GerarAsync(Cenario.ComandoGerar(), CancellationToken.None);
 
         Assert.Equal(1, await c.Db.Orcamentos.CountAsync());
-        Assert.Single(c.Eventos<OrcamentoGerado>());
+        Assert.Single(c.Eventos<OrcamentoCriado>());
     }
 
     [Fact]
@@ -90,7 +91,7 @@ public class OrcamentoServiceTests
         Assert.Equal(400m, pagamento.Valor);
         Assert.Equal(c.Relogio.GetUtcNow().UtcDateTime.AddMinutes(30), pagamento.ExpiraEm);
         var evento = Assert.Single(c.Eventos<OrcamentoAprovado>());
-        Assert.Equal(pagamento.PixCopiaECola, evento.PixCopiaECola);
+        Assert.Equal(pagamento.Valor, evento.ValorAprovado);
         Assert.Equal(OrcamentoStatus.Aprovado, (await c.Db.Orcamentos.SingleAsync()).Status);
     }
 
@@ -185,12 +186,10 @@ public class OrcamentoServiceTests
         Assert.Equal(PagamentoStatus.Cancelado, (await c.Db.Pagamentos.SingleAsync()).Status);
         Assert.Equal(global::wrench.billing.application.Abstractions.StatusProvedor.Cancelado,
             await c.Mock.ConsultarStatusAsync(externalId, CancellationToken.None));
-        var evento = Assert.Single(c.Eventos<OrcamentoCancelado>());
-        Assert.Equal(orcamento.Id, evento.OrcamentoId);
     }
 
     [Fact]
-    public async Task Cancelar_OrcamentoRecusadoPublicaCancelado()
+    public async Task Cancelar_OrcamentoRecusadoNaoPublicaEventoParaASaga()
     {
         var c = new Cenario();
         var orcamento = await c.GerarOrcamentoAsync();
@@ -201,7 +200,7 @@ public class OrcamentoServiceTests
             new CancelarOrcamento(Cenario.OrdemServicoId, Cenario.CorrelationId, "cliente recusou"), CancellationToken.None);
 
         Assert.Equal(OrcamentoStatus.Cancelado, (await c.Db.Orcamentos.SingleAsync()).Status);
-        Assert.Single(c.Eventos<OrcamentoCancelado>());
+        Assert.Empty(c.Publicadas);
     }
 
     [Fact]

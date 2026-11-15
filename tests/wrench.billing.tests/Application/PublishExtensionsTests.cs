@@ -2,7 +2,7 @@ using MassTransit;
 using MassTransit.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using wrench.billing.application;
-using wrench.billing.application.Contracts;
+using Wrench.Contracts;
 using wrench.billing.application.Extensions;
 
 namespace wrench.billing.tests.Application;

@@ -9,14 +9,14 @@ Funcionalidade: Orçamento, pagamento e estorno da ordem de serviço
   Cenário: Fluxo completo até o pagamento confirmado
     Quando o orquestrador pede a geração do orçamento
     Então o orçamento é gerado com o valor total de 400 reais
-    E o evento "OrcamentoGerado" é publicado
+    E o evento "OrcamentoCriado" é publicado
     Quando o cliente aprova o orçamento
     Então a cobrança Pix fica "Pendente"
     E o evento "OrcamentoAprovado" é publicado
     Quando o provedor confirma o pagamento via webhook
     Então o pagamento fica "Aprovado"
     E o orçamento fica "Pago"
-    E o evento "PagamentoConfirmado" é publicado com o valor de 400 reais
+    E o evento "PagamentoAprovado" é publicado com o valor de 400 reais
 
   Cenário: Execução não aceita a OS e o pagamento é estornado
     Dado um orçamento aprovado e pago
@@ -50,7 +50,6 @@ Funcionalidade: Orçamento, pagamento e estorno da ordem de serviço
     E o evento "OrcamentoRecusado" é publicado
     Quando o orquestrador manda cancelar o orçamento
     Então o orçamento fica "Cancelado"
-    E o evento "OrcamentoCancelado" é publicado
 
   Cenário: Pagamento recusado pelo provedor
     Dado um orçamento aprovado
@@ -58,7 +57,7 @@ Funcionalidade: Orçamento, pagamento e estorno da ordem de serviço
     Então o pagamento fica "Recusado"
     E o orçamento fica "Cancelado"
     E o evento "PagamentoFalhou" é publicado
-    E o evento "PagamentoConfirmado" não é publicado
+    E o evento "PagamentoAprovado" não é publicado
 
   Cenário: Cobrança Pix expira sem pagamento
     Dado um orçamento aprovado
@@ -71,7 +70,7 @@ Funcionalidade: Orçamento, pagamento e estorno da ordem de serviço
     Dado um orçamento aprovado
     Quando o provedor confirma o pagamento via webhook
     E o provedor envia a mesma notificação novamente
-    Então o evento "PagamentoConfirmado" é publicado 1 vez
+    Então o evento "PagamentoAprovado" é publicado 1 vez
 
   Cenário: Orçamento já pago não pode ser cancelado, só estornado
     Dado um orçamento aprovado e pago
@@ -80,8 +79,8 @@ Funcionalidade: Orçamento, pagamento e estorno da ordem de serviço
     E o orçamento fica "Pago"
 
   Cenário: Orçamento com dados inválidos falha sem criar nada
-    Dado um diagnóstico sem e-mail do cliente
+    Dado um diagnóstico sem valor nenhum
     Quando o orquestrador pede a geração do orçamento
     Então nenhum orçamento é criado
     E o evento "OrcamentoFalhou" é publicado
-    E o evento "OrcamentoGerado" não é publicado
+    E o evento "OrcamentoCriado" não é publicado
