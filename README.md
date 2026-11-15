@@ -74,6 +74,11 @@ forma aditiva na linha 1.x. O restore precisa de autenticação: veja "Build loc
 | `PagamentoFalhou` | Pagamento recusado, cancelado no provedor ou expirado (o Billing já cancela cobrança e orçamento). |
 | `PagamentoEstornado` / `EstornoFalhou` | Resultado de `EstornarPagamento`. |
 
+> **Quem notifica o cliente é o OS Service**, que tem SES e os event handlers. Por isso o contrato
+> `GerarOrcamento` não carrega o e-mail: `Orcamento.ClienteEmail` fica vazio e o
+> `LogOrcamentoNotificador` apenas registra. Se o envio passar a ser responsabilidade do Billing, o
+> campo volta ao contrato de forma aditiva na linha 1.x.
+
 ```mermaid
 sequenceDiagram
     participant OS as OS Service (orquestrador)
@@ -288,13 +293,8 @@ Falta a parte de SonarCloud, imagem no ECR e deploy no EKS, que dependem do work
 
 ## Pendências conhecidas
 
-- Pipeline completa (SonarCloud, ECR, deploy Helm): depende do workflow reutilizável do `infra-k8s`.
 - **Integração ponta a ponta ainda não exercitada contra a AWS real**: a mensageria só sobe depois que o
   `terraform/mensageria` do `infra-k8s` for aplicado. Até lá, o caminho de teste é `Messaging:Transport=InMemory`.
-- E-mail do orçamento: quem notifica o cliente é o OS Service, que tem SES e os event handlers. O contrato
-  `GerarOrcamento` não carrega o e-mail, então `Orcamento.ClienteEmail` fica vazio e o `LogOrcamentoNotificador`
-  apenas registra. Se o envio passar a ser do Billing, o campo volta ao contrato de forma aditiva na linha 1.x.
-- `CancelarOrcamento` não publica evento de retorno: a Saga trata essa compensação como fire-and-forget.
 - Collection Postman validada apenas como JSON e conferida com as rotas; ainda não foi importada e executada no Postman.
 - Observabilidade e trace distribuído (Billing → SQS → OS Service) a validar no New Relic em homologação.
 - Validado localmente (Docker 29, Helm 3.22): `docker build`, `docker compose up` com Postgres real (migrations aplicadas, `/health/ready` 200,
