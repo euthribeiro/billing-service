@@ -5,7 +5,7 @@ using wrench.billing.domain.Pagamentos;
 using wrench.billing.tests.Support;
 using Microsoft.EntityFrameworkCore;
 using Moq;
-using wrench.billing.application.Contracts;
+using Wrench.Contracts;
 using wrench.billing.application.Services;
 
 namespace wrench.billing.tests.Application;
@@ -26,8 +26,8 @@ public class PagamentoServiceTests
         Assert.Equal(ResultadoWebhook.Processado, resultado);
         Assert.Equal(PagamentoStatus.Aprovado, (await c.Db.Pagamentos.SingleAsync()).Status);
         Assert.Equal(OrcamentoStatus.Pago, (await c.Db.Orcamentos.SingleAsync()).Status);
-        var evento = Assert.Single(c.Eventos<PagamentoConfirmado>());
-        Assert.Equal(orcamento.Id, evento.OrcamentoId);
+        var evento = Assert.Single(c.Eventos<PagamentoAprovado>());
+        Assert.Equal((await c.Db.Pagamentos.SingleAsync()).Id, evento.PagamentoId);
         Assert.Equal(400m, evento.Valor);
         Assert.Equal(Cenario.CorrelationId, evento.CorrelationId);
     }
@@ -43,7 +43,7 @@ public class PagamentoServiceTests
         var segundo = await c.Pagamentos().ProcessarNotificacaoAsync(externalId, "req-1", Ct);
 
         Assert.Equal(ResultadoWebhook.Duplicado, segundo);
-        Assert.Single(c.Eventos<PagamentoConfirmado>());
+        Assert.Single(c.Eventos<PagamentoAprovado>());
     }
 
     [Fact]
@@ -57,7 +57,7 @@ public class PagamentoServiceTests
         var resultado = await c.Pagamentos().ProcessarNotificacaoAsync(externalId, "req-2", Ct);
 
         Assert.Equal(ResultadoWebhook.Processado, resultado);
-        Assert.Single(c.Eventos<PagamentoConfirmado>());
+        Assert.Single(c.Eventos<PagamentoAprovado>());
     }
 
     [Fact]
@@ -72,8 +72,8 @@ public class PagamentoServiceTests
         Assert.Equal(PagamentoStatus.Recusado, (await c.Db.Pagamentos.SingleAsync()).Status);
         Assert.Equal(OrcamentoStatus.Cancelado, (await c.Db.Orcamentos.SingleAsync()).Status);
         var falha = Assert.Single(c.Eventos<PagamentoFalhou>());
-        Assert.Equal(orcamento.Id, falha.OrcamentoId);
-        Assert.Empty(c.Eventos<PagamentoConfirmado>());
+        Assert.Equal(orcamento.OrdemServicoId, falha.OrdemServicoId);
+        Assert.Empty(c.Eventos<PagamentoAprovado>());
     }
 
     [Fact]
@@ -164,7 +164,7 @@ public class PagamentoServiceTests
         var alterados = await c.Pagamentos().ReconciliarPendentesAsync(Ct);
 
         Assert.Equal(1, alterados);
-        Assert.Single(c.Eventos<PagamentoConfirmado>());
+        Assert.Single(c.Eventos<PagamentoAprovado>());
     }
 
     [Fact]
@@ -183,7 +183,7 @@ public class PagamentoServiceTests
         Assert.Equal(OrcamentoStatus.Estornado, (await c.Db.Orcamentos.SingleAsync()).Status);
         Assert.Equal(StatusProvedor.Estornado, await c.Mock.ConsultarStatusAsync(externalId, Ct));
         var evento = Assert.Single(c.Eventos<PagamentoEstornado>());
-        Assert.Equal(orcamento.Id, evento.OrcamentoId);
+        Assert.Equal((await c.Db.Pagamentos.SingleAsync()).Id, evento.PagamentoId);
         Assert.Equal(400m, evento.Valor);
     }
 

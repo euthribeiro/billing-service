@@ -6,7 +6,7 @@ using MassTransit;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using wrench.billing.application.Contracts;
+using Wrench.Contracts;
 using wrench.billing.application.Responses;
 using wrench.billing.application.Options;
 using wrench.billing.application.Exceptions;
@@ -40,7 +40,7 @@ public class OrcamentoService(
             // Reentrega do comando: devolve o mesmo resultado, sem criar outro orçamento.
             logger.LogInformation("Orçamento da OS {OrdemServicoId} já existe; reenviando evento.", comando.OrdemServicoId);
             await publisher.PublishComCorrelacao(
-                new OrcamentoGerado(existente.OrdemServicoId, comando.CorrelationId, existente.Id, existente.ValorTotal),
+                new OrcamentoCriado(existente.OrdemServicoId, comando.CorrelationId, existente.Id, existente.ValorTotal, existente.CriadoEm),
                 comando.CorrelationId, ct);
             await db.SaveChangesAsync(ct);
             return;
@@ -50,11 +50,11 @@ public class OrcamentoService(
         try
         {
             var itens = (comando.Itens ?? [])
-                .Select(i => new ItemOrcamento(i.PecaId, i.Descricao, i.Quantidade, i.ValorUnitario));
+                .Select(i => new ItemOrcamento(i.PecaId, i.Nome, i.Quantidade, i.ValorUnitario));
 
             orcamento = Orcamento.Criar(
-                comando.OrdemServicoId, comando.CorrelationId, comando.ClienteId, comando.ClienteEmail,
-                comando.SolucaoProposta, comando.ValorMaoDeObra, itens, relogio.GetUtcNow().UtcDateTime);
+                comando.OrdemServicoId, comando.CorrelationId, comando.ClienteId,
+                comando.SolucaoProposta, comando.ValorServico, itens, relogio.GetUtcNow().UtcDateTime);
         }
         catch (DomainException ex)
         {
@@ -68,7 +68,7 @@ public class OrcamentoService(
 
         db.Orcamentos.Add(orcamento);
         await publisher.PublishComCorrelacao(
-            new OrcamentoGerado(orcamento.OrdemServicoId, orcamento.CorrelationId, orcamento.Id, orcamento.ValorTotal),
+            new OrcamentoCriado(orcamento.OrdemServicoId, orcamento.CorrelationId, orcamento.Id, orcamento.ValorTotal, orcamento.CriadoEm),
             orcamento.CorrelationId, ct);
         await db.SaveChangesAsync(ct);
 
@@ -101,7 +101,7 @@ public class OrcamentoService(
         // Chamada externa antes de persistir: se falhar, nada é gravado e o cliente pode tentar de novo.
         // O gateway usa o orçamento como chave de idempotência.
         var cobranca = await gateway.CriarCobrancaPixAsync(new CriarCobrancaRequest(
-            orcamento.Id, orcamento.OrdemServicoId, orcamento.ValorTotal, orcamento.ClienteEmail,
+            orcamento.Id, orcamento.OrdemServicoId, orcamento.ValorTotal, string.Empty,
             $"Ordem de serviço {orcamento.OrdemServicoId}", expiraEm), ct);
 
         var pagamento = Pagamento.Criar(
@@ -112,7 +112,7 @@ public class OrcamentoService(
         await publisher.PublishComCorrelacao(
             new OrcamentoAprovado(
                 orcamento.OrdemServicoId, orcamento.CorrelationId, orcamento.Id,
-                pagamento.PixCopiaECola, pagamento.ExpiraEm),
+                orcamento.ValorTotal, agora),
             orcamento.CorrelationId, ct);
         await db.SaveChangesAsync(ct);
 
@@ -126,10 +126,12 @@ public class OrcamentoService(
 
         var motivoFinal = string.IsNullOrWhiteSpace(motivo) ? "Não informado" : motivo.Trim();
 
-        if (orcamento.Recusar(motivoFinal, relogio.GetUtcNow().UtcDateTime))
+        var recusadoEm = relogio.GetUtcNow().UtcDateTime;
+
+        if (orcamento.Recusar(motivoFinal, recusadoEm))
         {
             await publisher.PublishComCorrelacao(
-                new OrcamentoRecusado(orcamento.OrdemServicoId, orcamento.CorrelationId, orcamento.Id, motivoFinal),
+                new OrcamentoRecusado(orcamento.OrdemServicoId, orcamento.CorrelationId, motivoFinal, recusadoEm),
                 orcamento.CorrelationId, ct);
             await db.SaveChangesAsync(ct);
         }
@@ -170,9 +172,10 @@ public class OrcamentoService(
 
         orcamento.Cancelar(comando.Motivo, agora);
 
-        await publisher.PublishComCorrelacao(
-            new OrcamentoCancelado(orcamento.OrdemServicoId, comando.CorrelationId, orcamento.Id, comando.Motivo),
-            comando.CorrelationId, ct);
+        logger.LogInformation(
+            "Orcamento {OrcamentoId} da OS {OrdemServicoId} cancelado: {Motivo}",
+            orcamento.Id, orcamento.OrdemServicoId, comando.Motivo);
+
         await db.SaveChangesAsync(ct);
     }
 

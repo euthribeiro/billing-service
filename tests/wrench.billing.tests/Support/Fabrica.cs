@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
-using wrench.billing.application.Contracts;
+using Wrench.Contracts;
 using wrench.billing.application.Services;
 using wrench.billing.application.Options;
 
@@ -57,9 +57,10 @@ public class Cenario
     public IEnumerable<T> Eventos<T>() where T : class => Publicadas.OfType<T>();
 
     public static GerarOrcamento ComandoGerar(
-        Guid? ordemServicoId = null, decimal maoDeObra = 100m, string email = "cliente@wrench.com.br")
-        => new(ordemServicoId ?? OrdemServicoId, CorrelationId, Guid.NewGuid(), email, "Trocar embreagem",
-            maoDeObra, [new ItemOrcamentoDto(Guid.NewGuid(), "Kit embreagem", 2, 150m)]);
+        Guid? ordemServicoId = null, decimal maoDeObra = 100m, int quantidadePecas = 2)
+        => new(ordemServicoId ?? OrdemServicoId, CorrelationId, Guid.NewGuid(), "Embreagem patinando",
+            "Trocar embreagem", maoDeObra,
+            [new ItemOrcamentoDto(Guid.NewGuid(), "Kit embreagem", quantidadePecas, 150m)]);
 
     /// <summary>Gera e persiste um orçamento pelo caso de uso real; retorna o id.</summary>
     public async Task<Orcamento> GerarOrcamentoAsync(GerarOrcamento? comando = null)

@@ -5,7 +5,7 @@ using wrench.billing.tests.Support;
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
 using Moq;
-using wrench.billing.application.Contracts;
+using Wrench.Contracts;
 
 namespace wrench.billing.tests.Application;
 
@@ -26,7 +26,7 @@ public class ConsumersTests
 
         await new GerarOrcamentoConsumer(c.Orcamentos()).Consume(Contexto(Cenario.ComandoGerar()));
 
-        Assert.Single(c.Eventos<OrcamentoGerado>());
+        Assert.Single(c.Eventos<OrcamentoCriado>());
     }
 
     [Fact]

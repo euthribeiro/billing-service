@@ -50,8 +50,12 @@ spec:
               value: {{ .Values.messaging.topicoEventos | quote }}
             - name: Messaging__TopicoComandos
               value: {{ .Values.messaging.topicoComandos | quote }}
-            - name: Messaging__PrefixoFilas
-              value: {{ .Values.messaging.prefixoFilas | quote }}
+            - name: Messaging__FilaGerarOrcamento
+              value: {{ .Values.messaging.filaGerarOrcamento | quote }}
+            - name: Messaging__FilaCancelarOrcamento
+              value: {{ .Values.messaging.filaCancelarOrcamento | quote }}
+            - name: Messaging__FilaEstornarPagamento
+              value: {{ .Values.messaging.filaEstornarPagamento | quote }}
             - name: Pagamento__ExpiracaoPixMinutos
               value: {{ .Values.pagamento.expiracaoPixMinutos | quote }}
             - name: Pagamento__ReconciliacaoIntervaloSegundos

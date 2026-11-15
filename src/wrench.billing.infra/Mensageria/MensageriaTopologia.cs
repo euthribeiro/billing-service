@@ -1,5 +1,5 @@
 using MassTransit;
-using wrench.billing.application.Contracts;
+using Wrench.Contracts;
 
 namespace wrench.billing.infra.Mensageria;
 
@@ -18,12 +18,22 @@ public class MensageriaOptions
     /// <summary>Tópico SNS do qual o Billing consome os comandos (publicados pelo orquestrador no OS Service).</summary>
     public const string TopicoComandosPadrao = "wrench-os-events";
 
-    /// <summary>Prefixo das filas SQS do Billing (uma por consumer, ex.: billing-gerar-orcamento).</summary>
-    public const string PrefixoFilasPadrao = "billing";
+    /// <summary>
+    /// Uma fila SQS por comando, provisionadas pelo Terraform do infra-k8s. Cada assinatura filtra
+    /// um unico valor do atributo <c>tipo</c>, o que permite entregar o JSON cru do contrato sem
+    /// envelope: a fila ja determina o tipo da mensagem.
+    /// </summary>
+    public const string FilaGerarOrcamentoPadrao = "wrench-billing-gerar-orcamento";
+
+    public const string FilaCancelarOrcamentoPadrao = "wrench-billing-cancelar-orcamento";
+
+    public const string FilaEstornarPagamentoPadrao = "wrench-billing-estornar-pagamento";
 
     public string TopicoEventos { get; set; } = TopicoEventosPadrao;
     public string TopicoComandos { get; set; } = TopicoComandosPadrao;
-    public string PrefixoFilas { get; set; } = PrefixoFilasPadrao;
+    public string FilaGerarOrcamento { get; set; } = FilaGerarOrcamentoPadrao;
+    public string FilaCancelarOrcamento { get; set; } = FilaCancelarOrcamentoPadrao;
+    public string FilaEstornarPagamento { get; set; } = FilaEstornarPagamentoPadrao;
 }
 
 public static class MensageriaTopologia
@@ -38,12 +48,11 @@ public static class MensageriaTopologia
         if (!string.IsNullOrWhiteSpace(opcoes.TopicoEventos))
         {
             var t = opcoes.TopicoEventos.Trim();
-            Topico<OrcamentoGerado>(cfg, t);
+            Topico<OrcamentoCriado>(cfg, t);
             Topico<OrcamentoFalhou>(cfg, t);
             Topico<OrcamentoAprovado>(cfg, t);
             Topico<OrcamentoRecusado>(cfg, t);
-            Topico<OrcamentoCancelado>(cfg, t);
-            Topico<PagamentoConfirmado>(cfg, t);
+            Topico<PagamentoAprovado>(cfg, t);
             Topico<PagamentoFalhou>(cfg, t);
             Topico<PagamentoEstornado>(cfg, t);
             Topico<EstornoFalhou>(cfg, t);

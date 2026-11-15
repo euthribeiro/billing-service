@@ -31,7 +31,6 @@ public class Orcamento
         Guid ordemServicoId,
         string correlationId,
         Guid clienteId,
-        string clienteEmail,
         string solucaoProposta,
         decimal valorMaoDeObra,
         IEnumerable<ItemOrcamento> itens,
@@ -39,8 +38,6 @@ public class Orcamento
     {
         if (ordemServicoId == Guid.Empty)
             throw new DomainException("A ordem de serviço é obrigatória.");
-        if (string.IsNullOrWhiteSpace(clienteEmail))
-            throw new DomainException("O e-mail do cliente é obrigatório.");
         if (string.IsNullOrWhiteSpace(correlationId))
             throw new DomainException("O correlationId é obrigatório.");
         if (valorMaoDeObra < 0)
@@ -52,7 +49,7 @@ public class Orcamento
             OrdemServicoId = ordemServicoId,
             CorrelationId = correlationId.Trim(),
             ClienteId = clienteId,
-            ClienteEmail = clienteEmail.Trim(),
+            ClienteEmail = string.Empty,
             SolucaoProposta = solucaoProposta ?? string.Empty,
             ValorMaoDeObra = valorMaoDeObra,
             Status = OrcamentoStatus.Gerado,

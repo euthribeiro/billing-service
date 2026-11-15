@@ -1,5 +1,5 @@
 using MassTransit;
-using wrench.billing.application.Contracts;
+using Wrench.Contracts;
 using wrench.billing.application.Services;
 
 namespace wrench.billing.application.Consumers;

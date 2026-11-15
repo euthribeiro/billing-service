@@ -59,7 +59,10 @@ messaging:
   # a mensageria. Valor vazio mantém o padrão do MassTransit (um tópico por tipo de mensagem).
   topicoEventos: wrench-billing-events   # onde o Billing publica todos os seus eventos
   topicoComandos: wrench-os-events       # de onde o Billing consome os comandos do orquestrador
-  prefixoFilas: billing                  # prefixo das filas (ex.: billing-gerar-orcamento)
+  # Uma fila por comando, provisionadas pelo terraform/mensageria do infra-k8s.
+  filaGerarOrcamento: wrench-billing-gerar-orcamento
+  filaCancelarOrcamento: wrench-billing-cancelar-orcamento
+  filaEstornarPagamento: wrench-billing-estornar-pagamento
 
 pagamento:
   expiracaoPixMinutos: 30

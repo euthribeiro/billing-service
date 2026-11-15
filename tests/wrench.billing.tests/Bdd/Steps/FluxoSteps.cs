@@ -2,7 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Moq;
 using Reqnroll;
 using wrench.billing.application.Abstractions;
-using wrench.billing.application.Contracts;
+using Wrench.Contracts;
 using wrench.billing.domain;
 using wrench.billing.tests.Bdd.Support;
 using wrench.billing.tests.Support;
@@ -26,8 +26,13 @@ public class FluxoSteps(FluxoContexto contexto)
         contexto.ValorPeca = valorPeca;
     }
 
-    [Given("um diagnóstico sem e-mail do cliente")]
-    public void DadoDiagnosticoSemEmail() => contexto.EmailCliente = " ";
+    [Given("um diagnóstico sem valor nenhum")]
+    public void DadoDiagnosticoSemValor()
+    {
+        contexto.ValorMaoDeObra = 0m;
+        contexto.QuantidadePecas = 0;
+        contexto.ValorPeca = 0m;
+    }
 
     [Given("que o provedor de pagamento recusa estornos")]
     public void DadoProvedorRecusaEstornos()

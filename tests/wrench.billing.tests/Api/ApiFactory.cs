@@ -9,7 +9,7 @@ using Microsoft.IdentityModel.Tokens;
 using wrench.billing.api.Controllers;
 using wrench.billing.application;
 using wrench.billing.application.Abstractions;
-using wrench.billing.application.Contracts;
+using Wrench.Contracts;
 using wrench.billing.application.Services;
 
 namespace wrench.billing.tests.Api;

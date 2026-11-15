@@ -8,7 +8,7 @@ public class OrcamentoTests
     private static readonly DateTime Agora = new(2026, 11, 10, 12, 0, 0, DateTimeKind.Utc);
 
     private static Orcamento Novo(decimal maoDeObra = 100m, params ItemOrcamento[] itens)
-        => Orcamento.Criar(Guid.NewGuid(), "corr-1", Guid.NewGuid(), " a@b.com ", "Troca de óleo",
+        => Orcamento.Criar(Guid.NewGuid(), "corr-1", Guid.NewGuid(), "Troca de óleo",
             maoDeObra, itens, Agora);
 
     [Fact]
@@ -18,7 +18,6 @@ public class OrcamentoTests
 
         Assert.Equal(150m, orcamento.ValorTotal);
         Assert.Equal(OrcamentoStatus.Gerado, orcamento.Status);
-        Assert.Equal("a@b.com", orcamento.ClienteEmail);
         Assert.Single(orcamento.Itens);
     }
 
@@ -31,14 +30,14 @@ public class OrcamentoTests
         => Assert.Throws<DomainException>(() => Novo(-1m, new ItemOrcamento(Guid.NewGuid(), "Filtro", 1, 50m)));
 
     [Fact]
-    public void Criar_SemEmailLanca()
+    public void Criar_SemCorrelationIdLanca()
         => Assert.Throws<DomainException>(() => Orcamento.Criar(
-            Guid.NewGuid(), "corr-1", Guid.NewGuid(), " ", "x", 10m, [], Agora));
+            Guid.NewGuid(), " ", Guid.NewGuid(), "x", 10m, [], Agora));
 
     [Fact]
     public void Criar_SemOrdemServicoLanca()
         => Assert.Throws<DomainException>(() => Orcamento.Criar(
-            Guid.Empty, "corr-1", Guid.NewGuid(), "a@b.com", "x", 10m, [], Agora));
+            Guid.Empty, "corr-1", Guid.NewGuid(), "x", 10m, [], Agora));
 
     [Theory]
     [InlineData("", 1, 1)]

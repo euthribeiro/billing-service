@@ -5,7 +5,7 @@ using wrench.billing.domain.Pagamentos;
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using wrench.billing.application.Contracts;
+using Wrench.Contracts;
 using wrench.billing.application.Responses;
 using wrench.billing.application.Exceptions;
 using wrench.billing.application.Extensions;
@@ -106,8 +106,8 @@ public class PagamentoService(
         if (pagamento is null)
         {
             await publisher.PublishComCorrelacao(
-                new EstornoFalhou(comando.OrdemServicoId, comando.CorrelationId, Guid.Empty,
-                    "Nenhum pagamento aprovado encontrado para a ordem de serviço."),
+                new EstornoFalhou(comando.OrdemServicoId, comando.CorrelationId,
+                    "Nenhum pagamento aprovado encontrado para a ordem de servico."),
                 comando.CorrelationId, ct);
             await db.SaveChangesAsync(ct);
             return;
@@ -117,7 +117,8 @@ public class PagamentoService(
         {
             // Reentrega: o estorno já foi feito; reafirma o resultado para a Saga.
             await publisher.PublishComCorrelacao(
-                new PagamentoEstornado(pagamento.OrdemServicoId, comando.CorrelationId, pagamento.OrcamentoId, pagamento.Valor),
+                new PagamentoEstornado(pagamento.OrdemServicoId, comando.CorrelationId, pagamento.Id,
+                    pagamento.Valor, relogio.GetUtcNow().UtcDateTime),
                 comando.CorrelationId, ct);
             await db.SaveChangesAsync(ct);
             return;
@@ -129,7 +130,7 @@ public class PagamentoService(
         {
             logger.LogError("Estorno recusado para a OS {OrdemServicoId}: {Erro}", comando.OrdemServicoId, resultado.Erro);
             await publisher.PublishComCorrelacao(
-                new EstornoFalhou(pagamento.OrdemServicoId, comando.CorrelationId, pagamento.OrcamentoId,
+                new EstornoFalhou(pagamento.OrdemServicoId, comando.CorrelationId,
                     resultado.Erro ?? "Estorno recusado pelo provedor."),
                 comando.CorrelationId, ct);
             await db.SaveChangesAsync(ct);
@@ -143,7 +144,8 @@ public class PagamentoService(
         orcamento?.Estornar(agora);
 
         await publisher.PublishComCorrelacao(
-            new PagamentoEstornado(pagamento.OrdemServicoId, comando.CorrelationId, pagamento.OrcamentoId, pagamento.Valor),
+            new PagamentoEstornado(pagamento.OrdemServicoId, comando.CorrelationId, pagamento.Id,
+                pagamento.Valor, agora),
             comando.CorrelationId, ct);
         await db.SaveChangesAsync(ct);
     }
@@ -162,8 +164,8 @@ public class PagamentoService(
                     var orcamento = await db.Orcamentos.FirstAsync(o => o.Id == pagamento.OrcamentoId, ct);
                     orcamento.MarcarComoPago(agora);
                     await publisher.PublishComCorrelacao(
-                        new PagamentoConfirmado(pagamento.OrdemServicoId, orcamento.CorrelationId,
-                            pagamento.OrcamentoId, pagamento.Valor),
+                        new PagamentoAprovado(pagamento.OrdemServicoId, orcamento.CorrelationId,
+                            pagamento.Id, pagamento.Valor, agora),
                         orcamento.CorrelationId, ct);
                     return true;
 
@@ -201,8 +203,8 @@ public class PagamentoService(
 
         var correlacao = orcamento.CorrelationId;
         await publisher.PublishComCorrelacao(
-            new PagamentoFalhou(pagamento.OrdemServicoId, correlacao, pagamento.OrcamentoId,
-                pagamento.MotivoFalha ?? "Pagamento não concluído."),
+            new PagamentoFalhou(pagamento.OrdemServicoId, correlacao,
+                pagamento.MotivoFalha ?? "Pagamento nao concluido."),
             correlacao, ct);
     }
 }
