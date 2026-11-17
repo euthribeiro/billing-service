@@ -288,8 +288,17 @@ helm upgrade --install wrench-billing ./chart -n production `
 
 O chart mantém **1 réplica** e o autoscaling desligado enquanto o gateway for o mock, porque o estado simulado fica em memória.
 
-A pipeline `.github/workflows/ci.yml` faz restore, build, testes com cobertura mínima de 80% e `helm lint`.
-Falta a parte de SonarCloud, imagem no ECR e deploy no EKS, que dependem do workflow reutilizável da plataforma.
+A pipeline `.github/workflows/ci.yml` chama o workflow reutilizável `dotnet-service-ci.yml` do `infra-k8s`: restore, build,
+testes com cobertura mínima de 80%, SonarCloud e `helm lint`. Passando, o job `deploy-producao` publica imagem e chart no ECR
+e aplica no EKS.
+
+O deploy roda em duas situações: no push para `main` e no **Run workflow** manual do CI na branch `main` — este último é o que
+a etapa 3 do orquestrador de provisionamento do `infra-k8s` dispara. Em pull request só o build e os testes rodam.
+
+`.github/workflows/destroy.yml` faz o caminho de volta: **Run workflow** na `main` com `confirmacao=DESTRUIR` desinstala o
+release `wrench-billing` do namespace `production`. O namespace fica de pé, porque é o `destroy.yml` do `app-k8s` que o remove —
+por isso a etapa 2 do orquestrador de destruição do `infra-k8s` chama este workflow antes da aplicação. Sem cluster ou sem os
+outputs do HCP Terraform, ele encerra sem erro.
 
 ## Pendências conhecidas
 
