@@ -24,6 +24,7 @@ on:
 
 permissions:
   contents: write
+  packages: read
 
 jobs:
   deploy:
@@ -84,8 +85,10 @@ jobs:
         env:
           ECR_REPOSITORY: ${{ steps.infra.outputs.api_repository }}
           IMAGE_TAG: ${{ steps.tag.outputs.new_version }}
+          GITHUB_PACKAGES_TOKEN: ${{ github.token }}
         run: |
-          docker build -t "$ECR_REPOSITORY:$IMAGE_TAG" -f ./Dockerfile .
+          docker build --secret id=gh_token,env=GITHUB_PACKAGES_TOKEN \
+            -t "$ECR_REPOSITORY:$IMAGE_TAG" -f ./Dockerfile .
           docker push "$ECR_REPOSITORY:$IMAGE_TAG"
 
       - name: Setup Helm

@@ -12,7 +12,10 @@ COPY ["src/wrench.billing.domain/wrench.billing.domain.csproj", "src/wrench.bill
 COPY ["src/wrench.billing.application/wrench.billing.application.csproj", "src/wrench.billing.application/"]
 COPY ["src/wrench.billing.infra/wrench.billing.infra.csproj", "src/wrench.billing.infra/"]
 COPY ["src/wrench.billing.api/wrench.billing.api.csproj", "src/wrench.billing.api/"]
-RUN dotnet restore "src/wrench.billing.api/wrench.billing.api.csproj"
+COPY ["nuget.config", "./"]
+RUN --mount=type=secret,id=gh_token \
+    GITHUB_PACKAGES_TOKEN="$(cat /run/secrets/gh_token)" \
+    dotnet restore "src/wrench.billing.api/wrench.billing.api.csproj"
 
 COPY src/ src/
 RUN dotnet publish "src/wrench.billing.api/wrench.billing.api.csproj" \
